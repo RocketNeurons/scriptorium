@@ -1,0 +1,6 @@
+{
+  "name": "Article",
+  "description": "A paper split into sections, with an equation, a plot, a table and a bibliography. Its text is a short tour of Scriptorium.",
+  "icon": "file-text",
+  "order": 2
+}

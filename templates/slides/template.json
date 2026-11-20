@@ -1,0 +1,6 @@
+{
+  "name": "Slides",
+  "description": "A Beamer talk: title slide, sections, bullet points that appear one by one, two columns and an equation.",
+  "icon": "monitor",
+  "order": 4
+}

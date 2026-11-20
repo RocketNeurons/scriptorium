@@ -1,0 +1,67 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{Title of the Paper}
+
+\author{
+  \IEEEauthorblockN{First Author}
+  \IEEEauthorblockA{Department, University\\City, Country\\first@example.org}
+  \and
+  \IEEEauthorblockN{Second Author}
+  \IEEEauthorblockA{Department, University\\City, Country\\second@example.org}
+}
+
+\maketitle
+
+\begin{abstract}
+State the problem, the approach and the main result in one paragraph.
+\end{abstract}
+
+\begin{IEEEkeywords}
+first keyword, second keyword, third keyword
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+Introduce the problem and cite the work it builds on \cite{knuth1984texbook, lamport1994latex}. Section~\ref{sec:method}
+describes the method and Section~\ref{sec:results} the results.
+
+\section{Method}
+\label{sec:method}
+Describe the approach. Equations are numbered on the right:
+\begin{equation}
+  \mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b} .
+  \label{eq:linear}
+\end{equation}
+
+\section{Results}
+\label{sec:results}
+Table~\ref{tab:main} compares the methods.
+
+\begin{table}[t]
+  \centering
+  \caption{Main results.}
+  \label{tab:main}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Accuracy & Time (s) \\
+    \midrule
+    Baseline & 0.81 & 1.0 \\
+    Ours & 0.89 & 1.2 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Conclusion}
+Sum up the findings.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

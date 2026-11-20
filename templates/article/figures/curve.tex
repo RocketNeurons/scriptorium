@@ -1,0 +1,15 @@
+% A plot drawn by pgfplots: no image file needed.
+\begin{tikzpicture}
+  \begin{axis}[
+      width=0.72\linewidth, height=5cm,
+      xlabel={Epoch}, ylabel={Loss},
+      xmin=0, xmax=50, ymin=0,
+      legend pos=north east, legend style={draw=none, font=\small},
+      grid=major, grid style={gray!25},
+    ]
+    \addplot[thick, blue!70!black, domain=0:50, samples=60] {0.1 + 2*exp(-x/8)};
+    \addlegendentry{$\eta = 10^{-3}$}
+    \addplot[thick, red!70!black, dashed, domain=0:50, samples=60] {0.3 + 1.6*exp(-x/4)};
+    \addlegendentry{$\eta = 10^{-2}$}
+  \end{axis}
+\end{tikzpicture}

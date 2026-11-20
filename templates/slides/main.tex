@@ -1,0 +1,73 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{Singapore}
+\usecolortheme{beaver}
+\setbeamertemplate{navigation symbols}{}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+
+\title{Title of the Talk}
+\subtitle{A subtitle, if you need one}
+\author{Your Name}
+\institute{Your Institution}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Motivation}
+
+\begin{frame}{Why this matters}
+  \begin{itemize}
+    \item<1-> The first point appears on its own.
+    \item<2-> The second one follows on the next click.
+    \item<3-> Each frame is a slide, and the outline on the left lists them by section.
+  \end{itemize}
+\end{frame}
+
+\section{Method}
+
+\begin{frame}{Two columns}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{Left}
+      \begin{itemize}
+        \item Text, lists, tables.
+        \item Double-click a slide to jump to its source.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Right}
+      \begin{equation*}
+        \hat{\theta} = \arg\min_{\theta} \sum_{i=1}^{n} \bigl(y_i - f_\theta(x_i)\bigr)^2
+      \end{equation*}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{Results}
+
+\begin{frame}{A table}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Accuracy & Time \\
+    \midrule
+    Baseline & 81\% & 1.0 \\
+    Ours & \alert{89\%} & 1.2 \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}
+  \centering
+  \Large Thank you. Questions?
+\end{frame}
+
+\end{document}

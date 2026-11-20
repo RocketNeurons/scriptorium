@@ -1,0 +1,29 @@
+\section{Results}
+\label{sec:results}
+
+Figure~\ref{fig:curve} is drawn by \texttt{figures/curve.tex} with pgfplots, so it needs no image file.
+Table~\ref{tab:results} uses the booktabs rules, which the \emph{Insert a table} command also uses.
+
+\begin{figure}[t]
+  \centering
+  \input{figures/curve}
+  \caption{Training loss for two learning rates.}
+  \label{fig:curve}
+\end{figure}
+
+\begin{table}[t]
+  \centering
+  \caption{Final loss and training time.}
+  \label{tab:results}
+  \begin{tabular}{lcc}
+    \toprule
+    Learning rate & Final loss & Time (min) \\
+    \midrule
+    $10^{-3}$ & 0.12 & 14 \\
+    $10^{-2}$ & 0.31 & 9 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+When the paper is done, the download button above the PDF saves it, and the \emph{Changes} panel commits your work
+if the folder is in git.

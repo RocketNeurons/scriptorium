@@ -1,0 +1,52 @@
+\documentclass[11pt,a4paper,oneside]{report}
+\usepackage[margin=2.8cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[numbers]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{definition}[theorem]{Definition}
+
+\begin{document}
+
+% ---------------------------------------------------------------- title page
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries Title of the Thesis\par}
+  \vspace{1.5cm}
+  {\Large Your Name\par}
+  \vspace{1cm}
+  {\large A thesis submitted for the degree of\\ Doctor of Philosophy\par}
+  \vfill
+  {\large Your University\\ \today\par}
+\end{titlepage}
+
+% ---------------------------------------------------------------- front matter
+\pagenumbering{roman}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+Summarise the problem, what you did and what you found, in about three hundred words.
+
+\chapter*{Acknowledgements}
+Thank the people who helped.
+
+\tableofcontents
+
+% ---------------------------------------------------------------- chapters, one file each (\input keeps BibTeX simple)
+\cleardoublepage
+\pagenumbering{arabic}
+\input{chapters/introduction}
+\input{chapters/background}
+\input{chapters/conclusion}
+
+\appendix
+\input{chapters/appendix}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

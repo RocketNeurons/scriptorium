@@ -1,0 +1,18 @@
+\section{Method}
+\label{sec:method}
+
+Put the cursor inside an equation and the editor shows it rendered, above the line you are typing. It also knows the
+commands defined in the preamble, such as \verb|\R| and \verb|\E|. For a state $x \in \R^n$ we minimise
+\begin{equation}
+  J(\theta) = \E_{x \sim p}\!\left[ \tfrac{1}{2} \lVert f_\theta(x) - y \rVert^2 \right]
+            + \lambda \sum_{i=1}^{n} \theta_i^2 ,
+  \label{eq:loss}
+\end{equation}
+where $\lambda > 0$ weighs the regulariser. Equation~\eqref{eq:loss} is a plain least-squares loss. The \emph{Symbols}
+panel on the left inserts Greek letters, operators and matrices with a click.
+
+\subsection{Writing tips}
+
+Type \verb|\begin{| to pick an environment: the editor writes the \verb|\end| for you and puts the cursor inside.
+Paste an image from the clipboard, or drop one on the editor, and it is saved in a figures folder with a figure
+around it.

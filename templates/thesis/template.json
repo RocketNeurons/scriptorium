@@ -1,0 +1,6 @@
+{
+  "name": "Thesis or report",
+  "description": "A long document: title page, abstract, contents, one file per chapter, an appendix and a bibliography.",
+  "icon": "book-open",
+  "order": 3
+}

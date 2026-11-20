@@ -1,0 +1,6 @@
+{
+  "name": "Conference paper (IEEE)",
+  "description": "A two-column paper in the IEEE conference style, with authors, keywords and IEEE references.",
+  "icon": "columns-2",
+  "order": 5
+}

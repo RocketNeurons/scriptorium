@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scriptorium</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141518" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/lib/cdnjs/KaTeX/0.16.11/katex.min.css">
+<link rel="stylesheet" href="/static/css/app.css">
+<script>
+  try {
+    const t = localStorage.getItem('scriptorium.theme') || 'system';
+    document.documentElement.dataset.theme = t === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+  } catch (e) { document.documentElement.dataset.theme = 'light'; }
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "@codemirror/state": "/lib/npm/@codemirror/state@6.5.2/dist/index.js",
+    "@codemirror/view": "/lib/npm/@codemirror/view@6.36.8/dist/index.js",
+    "@codemirror/language": "/lib/npm/@codemirror/language@6.11.0/dist/index.js",
+    "@codemirror/commands": "/lib/npm/@codemirror/commands@6.8.1/dist/index.js",
+    "@codemirror/search": "/lib/npm/@codemirror/search@6.5.11/dist/index.js",
+    "@codemirror/autocomplete": "/lib/npm/@codemirror/autocomplete@6.18.6/dist/index.js",
+    "@codemirror/lint": "/lib/npm/@codemirror/lint@6.8.5/dist/index.js",
+    "@codemirror/merge": "/lib/npm/@codemirror/merge@6.10.0/dist/index.js",
+    "@lezer/common": "/lib/npm/@lezer/common@1.2.3/dist/index.js",
+    "@lezer/highlight": "/lib/npm/@lezer/highlight@1.2.1/dist/index.js",
+    "@lezer/lr": "/lib/npm/@lezer/lr@1.4.2/dist/index.js",
+    "@marijn/find-cluster-break": "/lib/npm/@marijn/find-cluster-break@1.0.2/src/index.js",
+    "style-mod": "/lib/npm/style-mod@4.1.2/src/style-mod.js",
+    "w3c-keyname": "/lib/npm/w3c-keyname@2.2.8/index.js",
+    "crelt": "/lib/npm/crelt@1.0.6/index.js"
+  }
+}
+</script>
+<script src="/lib/cdnjs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="/lib/cdnjs/KaTeX/0.16.11/katex.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand" title="Scriptorium">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="8" class="logo-bg"/><g transform="translate(4.5 3.5)" class="logo-quill"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></g></svg>
+      <span class="brand-name">Scriptorium</span>
+    </div>
+    <button class="project-btn" id="projectBtn" title="Open another project">
+      <span class="project-name" id="projectName">…</span><i data-i="chevron-down"></i>
+    </button>
+    <div class="spacer"></div>
+    <div class="seg" id="layoutSeg" role="group" aria-label="Layout">
+      <button data-layout="editor" title="Editor only"><i data-i="file-pen-line"></i></button>
+      <button data-layout="split" title="Editor and PDF"><i data-i="columns-2"></i></button>
+      <button data-layout="pdf" title="PDF only"><i data-i="file-text"></i></button>
+    </div>
+    <button class="chip" id="statusChip" title="Problems"><span class="chip-dot"></span><span id="statusText">Not compiled yet</span></button>
+    <div class="compile-group">
+      <button class="btn primary" id="compileBtn" title="Save and compile (Ctrl+S)"><i data-i="play" id="compileIcon"></i><span>Compile</span></button>
+      <button class="btn primary caret" id="compileMenuBtn" title="Compile options"><i data-i="chevron-down"></i></button>
+    </div>
+    <button class="icon-btn" id="paletteBtn" title="Commands (Ctrl+Shift+P)"><i data-i="command"></i></button>
+    <button class="icon-btn" id="themeBtn" title="Light or dark"><i data-i="moon" id="themeIcon"></i></button>
+    <button class="icon-btn" id="settingsBtn" title="Settings"><i data-i="settings"></i></button>
+  </header>
+
+  <div class="workspace" id="workspace">
+    <nav class="activity" aria-label="Views">
+      <button data-view="files" class="on" title="Files and outline (Ctrl+Shift+E)"><i data-i="folder-tree"></i></button>
+      <button data-view="search" title="Search the project (Ctrl+Shift+F)"><i data-i="search"></i></button>
+      <button data-view="compare" title="Compare with another version"><i data-i="git-compare"></i><span class="badge dot" id="cmpBadge" hidden></span></button>
+      <button data-view="symbols" title="Math symbols"><i data-i="sigma"></i></button>
+      <button data-view="git" title="Changes and history"><i data-i="git-branch"></i><span class="badge" id="gitBadge" hidden></span></button>
+      <div class="spacer"></div>
+      <button id="wordsBtn" title="Word count by section"><i data-i="hash"></i></button>
+      <button id="keysBtn" title="Keyboard shortcuts"><i data-i="keyboard"></i></button>
+    </nav>
+
+    <aside class="sidebar" id="sidebar">
+      <section class="view on" data-view="files">
+        <div class="pane" id="filesPane">
+          <div class="pane-head">
+            <span>Files</span>
+            <div class="pane-actions">
+              <button class="mini" id="newFileBtn" title="New file"><i data-i="file-plus"></i></button>
+              <button class="mini" id="newDirBtn" title="New folder"><i data-i="folder-plus"></i></button>
+              <button class="mini" id="uploadBtn" title="Upload files"><i data-i="upload"></i></button>
+            </div>
+          </div>
+          <div class="tree" id="tree" tabindex="0"></div>
+        </div>
+        <div class="hsplit" id="outlineSplit"></div>
+        <div class="pane" id="outlinePane">
+          <div class="pane-head">
+            <span>Outline</span>
+            <div class="pane-actions">
+              <button class="mini" id="floatsBtn" title="Show figures and tables"><i data-i="image"></i></button>
+            </div>
+          </div>
+          <div class="outline" id="outline"></div>
+        </div>
+      </section>
+
+      <section class="view" data-view="search">
+        <div class="pane-head"><span>Search</span></div>
+        <div class="search-form">
+          <div class="field">
+            <input id="searchInput" placeholder="Search all files" spellcheck="false" autocomplete="off">
+            <div class="field-toggles">
+              <button class="mini tog" id="searchCase" title="Match case"><i data-i="case-sensitive"></i></button>
+              <button class="mini tog" id="searchWord" title="Whole word"><i data-i="whole-word"></i></button>
+              <button class="mini tog" id="searchRegex" title="Regular expression"><i data-i="regex"></i></button>
+            </div>
+          </div>
+          <div class="field">
+            <input id="replaceInput" placeholder="Replace with" spellcheck="false" autocomplete="off">
+            <div class="field-toggles">
+              <button class="mini" id="replaceAllBtn" title="Replace all"><i data-i="replace"></i></button>
+            </div>
+          </div>
+          <div class="search-summary" id="searchSummary"></div>
+        </div>
+        <div class="search-results" id="searchResults"></div>
+      </section>
+
+      <section class="view" data-view="compare">
+        <div class="pane-head"><span>Compare</span>
+          <div class="pane-actions"><button class="mini" id="cmpRefresh" title="Reload the other version"><i data-i="refresh-cw"></i></button></div>
+        </div>
+        <div class="cmp-body" id="cmpBody"></div>
+      </section>
+
+      <section class="view" data-view="symbols">
+        <div class="pane-head"><span>Symbols</span></div>
+        <div class="sym-host" id="symHost"></div>
+      </section>
+
+      <section class="view" data-view="git">
+        <div class="pane-head"><span>Changes</span><span class="branch" id="gitBranch"></span>
+          <div class="pane-actions"><button class="mini" id="gitRefresh" title="Refresh"><i data-i="refresh-cw"></i></button></div>
+        </div>
+        <div class="git-body" id="gitBody"></div>
+      </section>
+    </aside>
+    <div class="vsplit" id="sideSplit"></div>
+
+    <main class="editor-col" id="editorCol">
+      <div class="tabs" id="tabs"></div>
+      <div class="cmpbar" id="cmpBar" hidden></div>
+      <div class="banner" id="banner" hidden></div>
+      <div class="editor-host" id="editorHost">
+        <div class="cm-host" id="cmHost"></div>
+        <div class="preview" id="preview" hidden></div>
+        <div class="diff" id="diffHost" hidden></div>
+        <div class="empty" id="editorEmpty" hidden>
+          <div class="empty-card"><i data-i="file-text"></i><p>Open a file from the list on the left, or press <kbd>Ctrl</kbd> <kbd>P</kbd>.</p></div>
+        </div>
+      </div>
+      <div class="drawer" id="drawer" hidden>
+        <div class="drawer-head">
+          <button class="dtab on" data-dtab="problems">Problems <span class="count" id="probCount">0</span></button>
+          <button class="dtab" data-dtab="log">Raw log</button>
+          <div class="spacer"></div>
+          <div class="filters" id="probFilters">
+            <button class="filter on" data-kind="error"><i data-i="circle-x"></i><span id="nErr">0</span></button>
+            <button class="filter on" data-kind="warning"><i data-i="triangle-alert"></i><span id="nWarn">0</span></button>
+            <button class="filter" data-kind="box" title="Overfull and underfull boxes"><i data-i="text-cursor-input"></i><span id="nBox">0</span></button>
+          </div>
+          <button class="mini" id="drawerClose" title="Close"><i data-i="x"></i></button>
+        </div>
+        <div class="drawer-body">
+          <div class="problems" id="problems"></div>
+          <pre class="log" id="log" hidden></pre>
+        </div>
+      </div>
+    </main>
+
+    <div class="divider" id="divider">
+      <button class="sync" id="syncToPdf" title="Show the cursor in the PDF (Ctrl+J)"><i data-i="arrow-right"></i></button>
+      <button class="sync" id="syncToCode" title="Show this part of the PDF in the source"><i data-i="arrow-left"></i></button>
+    </div>
+
+    <section class="pdf-col" id="pdfCol">
+      <div class="pdf-pane" id="pdfMain">
+      <div class="pdfbar">
+        <span class="pdf-label" id="pdfMainLabel" hidden></span>
+        <div class="pager"><input id="pageInput" value="1" aria-label="Page"><span id="pageCount">/ 0</span></div>
+        <div class="spacer"></div>
+        <button class="icon-btn sm" id="zoomOut" title="Zoom out"><i data-i="zoom-out"></i></button>
+        <select id="zoomSelect" title="Zoom">
+          <option value="width">Fit width</option>
+          <option value="page">Fit page</option>
+          <option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option>
+          <option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option>
+          <option value="custom" hidden>…</option>
+        </select>
+        <button class="icon-btn sm" id="zoomIn" title="Zoom in"><i data-i="zoom-in"></i></button>
+        <div class="spacer"></div>
+        <button class="icon-btn sm tog" id="pdfDark" title="Dark pages"><i data-i="moon-star"></i></button>
+        <a class="icon-btn sm" id="pdfDownload" href="/pdf?download=1" title="Download the PDF"><i data-i="download"></i></a>
+        <a class="icon-btn sm" id="pdfOpen" href="/pdf" target="_blank" rel="noopener" title="Open the PDF in a new tab"><i data-i="external-link"></i></a>
+      </div>
+      <div class="pdf-scroll" id="pdfScroll">
+        <div class="pdf-pages" id="pdfPages"></div>
+        <div class="pdf-empty" id="pdfEmpty">
+          <div class="empty-card"><i data-i="file-text"></i><p>No PDF yet.</p><button class="btn primary" id="pdfEmptyCompile"><i data-i="play"></i><span>Compile</span></button></div>
+        </div>
+      </div>
+      </div>
+      <div class="hsplit pdf-split" id="pdfSplit" hidden></div>
+      <div class="pdf-pane ref" id="pdfRef" hidden>
+        <div class="pdfbar">
+          <span class="pdf-label ref" id="pdfRefLabel"></span>
+          <div class="pager"><input id="refPageInput" value="1" aria-label="Page of the other version"><span id="refPageCount">/ 0</span></div>
+          <div class="spacer"></div>
+          <button class="icon-btn sm" id="refZoomOut" title="Zoom out"><i data-i="zoom-out"></i></button>
+          <button class="icon-btn sm" id="refZoomFit" title="Fit width"><i data-i="maximize"></i></button>
+          <button class="icon-btn sm" id="refZoomIn" title="Zoom in"><i data-i="zoom-in"></i></button>
+          <div class="spacer"></div>
+          <button class="icon-btn sm" id="refSync" title="Show this part in your source"><i data-i="arrow-left"></i></button>
+          <button class="icon-btn sm" id="refRecompile" title="Compile the other version again"><i data-i="refresh-cw"></i></button>
+          <button class="icon-btn sm" id="refHide" title="Hide this PDF (the comparison stays on)"><i data-i="x"></i></button>
+        </div>
+        <div class="pdf-scroll" id="pdfRefScroll">
+          <div class="pdf-pages" id="pdfRefPages"></div>
+          <div class="pdf-empty" id="pdfRefEmpty"><div class="empty-card"><i data-i="loader-circle" class="spin"></i><p>Compiling the other version…</p></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="statusbar">
+    <div class="sb-left">
+      <span class="sb-item" id="sbBranch" hidden><i data-i="git-branch"></i><span></span></span>
+      <button class="sb-item" id="sbProblems"><i data-i="circle-x"></i><span id="sbErr">0</span><i data-i="triangle-alert"></i><span id="sbWarn">0</span></button>
+      <span class="sb-item muted" id="sbSaved"></span>
+    </div>
+    <div class="sb-right">
+      <span class="sb-item" id="sbPos"></span>
+      <button class="sb-item" id="sbWords" title="Word count by section"></button>
+      <button class="sb-item" id="sbSpell" title="Spell checking"></button>
+      <button class="sb-item" id="sbMain" title="Main document"><i data-i="house"></i><span></span></button>
+    </div>
+  </footer>
+</div>
+<div id="layer"></div>
+<input type="file" id="fileInput" multiple hidden>
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

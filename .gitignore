@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+# Tectonic, when its installer puts it next to Scriptorium
+/tectonic
+/tectonic.exe
