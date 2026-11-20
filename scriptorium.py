@@ -15,6 +15,7 @@ import json
 import mimetypes
 import os
 import platform
+import secrets
 import re
 import shutil
 import subprocess
@@ -28,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import door
 from synctex import SyncTex
 
 VERSION = '1.0.0'
@@ -52,6 +54,7 @@ def app_dirs():
 
 CACHE, CONFIG, TRASH = app_dirs()
 STATE_FILE = Path(os.environ.get('SCRIPTORIUM_STATE') or CONFIG / 'state.json')
+DOOR = door.Door(Path(os.environ.get('SCRIPTORIUM_TOKEN_FILE') or CONFIG / 'agent-token'))
 
 
 def system_name():
@@ -665,6 +668,72 @@ class H(BaseHTTPRequestHandler):
         ctype = TYPES.get(p.suffix.lower()) or mimetypes.guess_type(p.name)[0] or 'application/octet-stream'
         return self.reply(200, p.read_bytes(), ctype, cache, extra)
 
+    # -- the agent door ------------------------------------------------------------------------
+    def door_url(self):
+        return f'http://localhost:{self.server.server_address[1]}'
+
+    def door_info(self):
+        url = self.door_url()
+        mcp = f'{url}/mcp?token={DOOR.token}'
+        return dict(token=DOOR.token, url=url, mcp=mcp, manual=f'{url}/agent?token={DOOR.token}')
+
+    def door_manual(self, with_http=True):
+        root, main = (str(P.root), P.main) if P else ('(no project open yet)', '-')
+        text = door.MANUAL.format(root=root, main=main)
+        return text + door.HTTP_MANUAL.format(token=DOOR.token, url=self.door_url()) if with_http else text
+
+    def door_agent_name(self, q):
+        return (self.headers.get('X-Scriptorium-Agent') or q.get('agent') or 'agent').strip()[:60] or 'agent'
+
+    def door_token_ok(self, q):
+        t = self.headers.get('X-Scriptorium-Token') or q.get('token') or ''
+        auth = self.headers.get('Authorization', '')
+        if not t and auth.lower().startswith('bearer '):
+            t = auth[7:].strip()
+        return bool(t) and secrets.compare_digest(t, DOOR.token)
+
+    def door_get(self, path, q):
+        if not self.door_token_ok(q):
+            return self.reply(401, 'Scriptorium agent door: add the token from the Assistant panel, '
+                                   'as ?token=... or the header X-Scriptorium-Token.\n', 'text/plain; charset=utf-8')
+        if path == '/agent':
+            return self.reply(200, self.door_manual(), 'text/markdown; charset=utf-8')
+        tools = {'/agent/wait': 'wait_for_message', '/agent/context': 'get_context', '/agent/files': 'list_files',
+                 '/agent/file': 'read_file'}
+        if path not in tools:
+            return self.reply(404, dict(error='not found'))
+        args = dict(q)
+        args.pop('token', None)
+        return self.door_run(tools[path], args, self.door_agent_name(q))
+
+    def door_post(self, path, q, raw):
+        if not self.door_token_ok(q):
+            return self.reply(401, dict(error='bad or missing token'))
+        try:
+            body = json.loads(raw or b'{}')
+        except ValueError:
+            return self.reply(400, dict(jsonrpc='2.0', id=None, error=dict(code=-32700, message='Parse error')))
+        if path == '/mcp':
+            res, headers = door.mcp_handle(DOOR, lambda: P, body, self.headers.get('Mcp-Session-Id'),
+                                           lambda: self.door_manual(with_http=False))
+            if res is None:
+                return self.reply(202, b'', 'application/json', extra=headers)
+            return self.reply(200, res, extra=headers)
+        tools = {'/agent/say': 'send_message', '/agent/status': 'set_status', '/agent/edit': 'edit_file',
+                 '/agent/write': 'write_file', '/agent/compile': 'compile', '/agent/show': 'show_location',
+                 '/agent/wait': 'wait_for_message', '/agent/context': 'get_context', '/agent/file': 'read_file'}
+        if path not in tools:
+            return self.reply(404, dict(error='not found'))
+        return self.door_run(tools[path], body if isinstance(body, dict) else {}, self.door_agent_name(q))
+
+    def door_run(self, tool, args, agent):
+        try:
+            return self.reply(200, door.run_tool(DOOR, lambda: P, tool, args, agent))
+        except door.ToolError as e:
+            return self.reply(400, dict(error=str(e)))
+        except (KeyError, ValueError, OSError) as e:
+            return self.reply(400, dict(error=f'{type(e).__name__}: {e}'))
+
     def do_GET(self):
         if not self.host_ok():
             return self.reply(403, dict(error='bad host'))
@@ -686,6 +755,16 @@ class H(BaseHTTPRequestHandler):
                                   'public, max-age=31536000, immutable')
             if path == '/api/project':
                 return self.reply(200, P.info() if P else None)
+            if path == '/api/chat':
+                chat, agents, last = DOOR.history()
+                return self.reply(200, dict(chat=chat, agents=agents, last=last, door=self.door_info()))
+            if path == '/api/chat/events':
+                events, agents = DOOR.wait_events(int(q.get('since', 0)), min(25.0, float(q.get('timeout', 20))))
+                return self.reply(200, dict(events=events, agents=agents))
+            if path == '/mcp':
+                return self.reply(405, dict(error='POST JSON-RPC messages here'), extra={'Allow': 'POST'})
+            if path == '/agent' or path.startswith('/agent/'):
+                return self.door_get(path, q)
             if path == '/api/welcome':
                 return self.reply(200, welcome())
             if path == '/api/browse':
@@ -745,15 +824,29 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         global P, REF
-        if not self.host_ok() or self.headers.get('X-Scriptorium') != '1':
+        if not self.host_ok():
             return self.reply(403, dict(error='forbidden'))
         n = int(self.headers.get('Content-Length', 0))
         if n > MAX_BODY:
             return self.reply(413, dict(error='too large'))
-        raw = self.rfile.read(n)
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if u.path == '/mcp' or u.path.startswith('/agent/'):
+            return self.door_post(u.path, q, self.rfile.read(n))
+        if self.headers.get('X-Scriptorium') != '1':
+            return self.reply(403, dict(error='forbidden'))
+        raw = self.rfile.read(n)
         try:
+            # -- the Assistant panel
+            if u.path == '/api/chat/send':
+                body = json.loads(raw or b'{}')
+                return self.reply(200, DOOR.user_says(str(body['text'])[:20000], body.get('context')))
+            if u.path == '/api/chat/context':
+                DOOR.context = json.loads(raw or b'{}').get('context') or {}
+                return self.reply(200, dict(ok=True))
+            if u.path == '/api/chat/clear':
+                DOOR.clear()
+                return self.reply(200, dict(ok=True))
             if P is None and u.path not in ('/api/open', '/api/create'):
                 return self.reply(409, dict(error='No project is open yet.'))
             if u.path == '/api/upload':
@@ -775,7 +868,9 @@ class H(BaseHTTPRequestHandler):
                 os.replace(tmp, p)
                 return self.reply(200, dict(mtime=p.stat().st_mtime))
             if u.path == '/api/compile':
-                return self.reply(200, P.compile())
+                r = P.compile()
+                DOOR.compile_result = r
+                return self.reply(200, r)
             if u.path == '/api/synctex/edit':
                 prj = REF if body.get('ref') else P
                 r = prj.synctex().edit(int(body['page']), float(body['x']), float(body['y']))

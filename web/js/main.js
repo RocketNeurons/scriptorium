@@ -14,6 +14,7 @@ import {
 import { PdfView, renderPdfThumb } from './pdfview.js';
 import { buildSymbolPanel } from './symbols.js';
 import { diffStats, mapLine } from './compare.js';
+import { markdown } from './markdown.js';
 
 // ------------------------------------------------------------------ settings
 const DEFAULTS = {
@@ -555,6 +556,13 @@ async function compile() {
     S.queued = false;
     return;
   }
+  await applyCompileResult(r);
+  if (S.queued) { S.queued = false; compile(); }
+}
+
+// Show a compile result: problems, marks in the editor, the status chip, the new PDF. Also used for compiles an
+// agent starts through the door.
+async function applyCompileResult(r) {
   S.lastCompile = r;
   S.issues = r.issues.map((i) => ({ ...i, hint: i.kind === 'error' || i.kind === 'warning' ? hintFor(i.msg) : '' }));
   applyCompileMarks();
@@ -571,7 +579,6 @@ async function compile() {
     await pdf.load('/pdf?v=' + r.pdf_mtime);
     if (settings.followCursor) syncToPdf(true);
   }
-  if (S.queued) { S.queued = false; compile(); }
 }
 
 function setChip(kind, text) {
@@ -692,6 +699,7 @@ function activate(key, keepScroll) {
   renderTree();
   renderBanner();
   cursorMoved();
+  pushContext();
   persistTabs();
 }
 
@@ -847,6 +855,7 @@ function renderTree() {
           oncontextmenu: (e) => treeMenu(e, k.path, false),
         }, h('span.twisty'), h('span.row-icon', icon(fileIconName(k.path, k.kind))), h('span.name', k.name),
         k.path === mainPath() ? h('span.tag.main', { title: 'Main document' }, 'main') : null,
+        A.reviews.has(k.path) ? h('span.tag.review', { title: 'An agent changed this file: keep or undo' }, 'review') : null,
         ne ? h('span.errs', { title: `${ne} error${ne > 1 ? 's' : ''}` }, ne) : null,
         S.dirty.has(k.path) ? h('span.dirty', { title: 'Unsaved' }) : null,
         g ? h('span.git.git-' + g, { title: { M: 'Modified', U: 'New, not in git', A: 'Added', D: 'Deleted', R: 'Renamed' }[g] }, g) : null));
@@ -987,6 +996,7 @@ const cursorMoved = debounce(() => {
     $('#sbPos').textContent = `Ln ${ln.number}, Col ${sel.head - ln.from + 1}` + (n ? ` · ${n} selected` : '');
     if (settings.followCursor) followSoon();
     rememberCursor();
+    pushContext();
   } else $('#sbPos').textContent = '';
   markOutline();
 }, 60);
@@ -1437,6 +1447,256 @@ async function addReference() {
   toast(`Added ${r.key} to ${target}`);
 }
 
+// ------------------------------------------------------------------ the Assistant: the user's own agent, through the door
+// Scriptorium runs no model. An agent (Claude Code, Codex, any MCP client or script) connects to the door with the
+// token, waits for the messages written here, answers, and edits files. Its edits show as changes to keep or undo.
+const A = { chat: [], agents: [], since: 0, door: null, reviews: new Map(), unread: 0, loop: false };
+
+async function startAssistant() {
+  try {
+    const r = await api('/api/chat');
+    A.chat = r.chat;
+    A.agents = r.agents;
+    A.since = r.last;
+    A.door = r.door;
+  } catch (e) { return; }
+  renderAssistant();
+  if (!A.loop) { A.loop = true; assistantLoop(); }
+}
+
+async function assistantLoop() {
+  for (;;) {
+    try {
+      const r = await api(`/api/chat/events?since=${A.since}&timeout=20`);
+      A.agents = r.agents;
+      for (const e of r.events) { A.since = Math.max(A.since, e.id); await assistantEvent(e); }
+      renderPresence();
+    } catch (e) {
+      await new Promise((res) => setTimeout(res, 3000));
+    }
+  }
+}
+
+async function assistantEvent(e) {
+  if (e.type === 'chat') {
+    A.chat.push(e.message);
+    appendMessage(e.message);
+    if (e.message.role !== 'user' && !assistantVisible()) {
+      A.unread++;
+      const b = $('#asstBadge');
+      b.hidden = false;
+      b.textContent = A.unread;
+      if (e.message.role === 'agent') toast(`${e.message.agent}: ${e.message.text.split('\n')[0].slice(0, 90)}`, 'info', 4500);
+    }
+  } else if (e.type === 'taken') {
+    const m = A.chat.find((x) => x.mid === e.mid);
+    if (m) { m.taken_by = e.agent; const el = $(`#asstBody .msg[data-mid="${e.mid}"] .seen`); if (el) el.textContent = `read by ${e.agent}`; }
+  } else if (e.type === 'presence' && e.joined) {
+    toast(`${e.joined} connected to Scriptorium`);
+  } else if (e.type === 'edit') {
+    await agentEdited(e);
+  } else if (e.type === 'compiled') {
+    await applyCompileResult(e.result);
+  } else if (e.type === 'show') {
+    if (has(e.path)) { await openFile(e.path, { line: e.line, flash: true }); syncToPdf(true); }
+  } else if (e.type === 'cleared') {
+    A.chat = [];
+    renderAssistant();
+  }
+}
+
+function assistantVisible() { return S.view === 'assistant' && !$('#sidebar').classList.contains('collapsed'); }
+
+// An agent changed a file: load the new text and show the change for review (keep or undo).
+async function agentEdited(e) {
+  if (!A.reviews.has(e.path)) A.reviews.set(e.path, { base: e.before, agent: e.agent, note: e.note });
+  else if (e.note) A.reviews.get(e.path).note = e.note;
+  if (e.created || !S.fileMap.has(e.path)) await refreshProject();
+  if (S.texts.has(e.path)) await diskChanged(e.path);
+  const t = activeTab();
+  const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('.cm-content');
+  if (t && t.kind === 'text' && t.path === e.path) applyCompare(e.path);
+  else if (!typing) await openFile(e.path, { line: e.line, flash: true, focus: false });
+  renderTree();
+  renderReviews();
+}
+
+function applyUserText(path, text) {
+  const st = S.states.get(path);
+  if (!st) return;
+  const old = textOfState(st);
+  if (old === text) return;
+  const tr = { changes: { from: 0, to: old.length, insert: text } };
+  if (S.active === path && editor.view.state === st) editor.view.dispatch(tr);
+  else { S.states.set(path, st.update(tr).state); updateDirty(path); autosave(); }
+}
+
+async function finishReview(path, how) {
+  const rv = A.reviews.get(path);
+  if (!rv) return;
+  if (how === 'undo') {
+    if (!S.states.has(path)) await openFile(path, { focus: false });
+    A.reviews.delete(path);
+    applyUserText(path, rv.base);
+    toast(`Undid ${rv.agent}'s changes in ${base(path)} (Ctrl+Z brings them back)`);
+  } else {
+    A.reviews.delete(path);
+    toast(`Kept ${rv.agent}'s changes in ${base(path)}`);
+  }
+  const t = activeTab();
+  if (t && t.kind === 'text' && t.path === path) { applyCompare(path); loadGitBase(path); }
+  renderTree();
+  renderReviews();
+}
+
+// What the user is looking at, sent with each message and kept fresh for the agent's get_context.
+function currentContext() {
+  const c = { open_tabs: S.tabs.filter((x) => x.kind === 'text').map((x) => x.path) };
+  const t = activeTab();
+  if (t && t.kind === 'text') {
+    const st = editor.view.state;
+    const sel = st.selection.main;
+    const ln = st.doc.lineAt(sel.head);
+    c.file = t.path;
+    c.line = ln.number;
+    c.column = sel.head - ln.from + 1;
+    if (!sel.empty) {
+      c.selection = st.sliceDoc(sel.from, sel.to).slice(0, 8000);
+      c.selection_lines = [st.doc.lineAt(sel.from).number, st.doc.lineAt(sel.to).number];
+    }
+  }
+  const errs = S.issues.filter((i) => i.kind === 'error').slice(0, 12).map((i) => `${i.file || '?'}:${i.line || '?'}: ${i.msg}`);
+  if (errs.length) c.compile_errors = errs;
+  if (C.ref) c.comparing_with = C.ref.root;
+  return c;
+}
+const pushContext = debounce(() => { if (S.project) api('/api/chat/context', { context: currentContext() }).catch(() => {}); renderCtxChip(); }, 600);
+
+function renderCtxChip() {
+  const box = $('#asstCtx');
+  if (!box) return;
+  const c = currentContext();
+  box.replaceChildren(...(c.file ? [icon('file-text'), h('span', c.selection ? `${base(c.file)}: lines ${c.selection_lines[0]}–${c.selection_lines[1]} selected` : `${base(c.file)}, line ${c.line}`)] : [h('span', 'No file open')]),
+    h('span.muted', ' · sent with your message'));
+}
+
+async function sendChat() {
+  const ta = $('#chatInput');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  autosizeChat();
+  await saveAll();  // the agent reads files from disk: give it what is on screen
+  try { await api('/api/chat/send', { text, context: currentContext() }); }
+  catch (e) { ta.value = text; toast('Not sent: ' + e.message, 'error'); }
+}
+
+function autosizeChat() {
+  const ta = $('#chatInput');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(200, ta.scrollHeight + 2) + 'px';
+}
+
+function agentState() {
+  const a = A.agents[0];
+  if (!a) return null;
+  return { name: a.name, text: a.waiting ? 'listening' : a.status ? a.status : a.seen < 90 ? 'working…' : 'connected', busy: !a.waiting, more: A.agents.length - 1 };
+}
+
+function renderPresence() {
+  const st = agentState();
+  const who = $('#asstWho');
+  const pres = $('#asstPresence');
+  if (!who) return;
+  who.textContent = st ? st.name : '';
+  pres.replaceChildren(st
+    ? h('span.pres' + (st.busy ? '.busy' : '.on'), h('span.dot'), h('b', st.name), ' ', st.text, st.busy ? h('span.dots', h('i'), h('i'), h('i')) : null, st.more > 0 ? ` (+${st.more} more)` : '')
+    : h('span.pres.off', h('span.dot'), 'No agent connected. ', h('a', { href: '#', onclick: (ev) => { ev.preventDefault(); showConnect(); } }, 'Connect one')));
+}
+
+function connectCard() {
+  const d = A.door || {};
+  const snip = (label, text, sub) => h('div.snip', h('div.snip-l', label), sub ? h('div.snip-s', sub) : null,
+    h('div.snip-b', h('code', text), h('button.mini', { title: 'Copy', onclick: () => navigator.clipboard.writeText(text).then(() => toast('Copied')) }, icon('copy'))));
+  return h('div.connect',
+    h('div.t', icon('plug'), 'Connect your AI agent'),
+    h('p', 'Scriptorium does not run a model or need an API key. Your own agent connects to it here, on this computer, with its own login. It then sees what you are looking at, answers here and edits the document. You keep or undo every change.'),
+    snip('Claude Code: run once in a terminal', `claude mcp add --transport http --scope user scriptorium "${d.mcp}"`),
+    snip('Codex, Cursor and other MCP apps: add this server URL', d.mcp || '', 'MCP over streamable HTTP'),
+    snip('Any agent with a terminal: paste this to it', `Read the instructions at ${d.manual} (use curl) and follow them to work with me in Scriptorium.`),
+    h('p.after', 'Then tell your agent: ', h('b', '“Listen to me in Scriptorium.”'), ' It waits for what you write below, and works on the document you have open.'),
+    h('p.after.muted', 'The address contains a private key for this computer. Share it only with your own agents.'));
+}
+
+function showConnect() {
+  showView('assistant');
+  const body = $('#asstBody');
+  const card = connectCard();
+  body.prepend(card);
+  card.scrollIntoView({ block: 'start' });
+}
+
+function messageEl(m) {
+  if (m.role === 'user') {
+    const c = m.context || {};
+    const where = c.file ? (c.selection ? `${base(c.file)}: lines ${c.selection_lines ? c.selection_lines.join('–') : ''} selected` : `${base(c.file)}, line ${c.line}`) : '';
+    return h('div.msg.user', { dataset: { mid: m.mid } }, h('div.bubble', m.text),
+      h('div.meta', where ? h('span', where) : null, h('span.seen', m.taken_by ? `read by ${m.taken_by}` : 'waiting for an agent')));
+  }
+  if (m.role === 'activity') {
+    const ic = { edit: 'pencil-line', compile: 'play', show: 'crosshair' }[m.kind] || 'circle-dot';
+    const pending = m.kind === 'edit' && m.path && A.reviews.has(m.path);
+    return h('div.msg.act' + (pending ? '.pending' : ''), { dataset: m.kind === 'edit' && m.path ? { mid: m.mid, path: m.path } : { mid: m.mid } },
+      icon(ic), h('span.what', h('b', m.agent), ' ', m.text.replace(/^./, (x) => x.toLowerCase())),
+      m.kind === 'edit' ? h('span.tag', 'to review') : null,
+      m.path && has(m.path) ? h('button.mini.go', { title: 'Open', onclick: () => openFile(m.path, { line: m.line || 1, flash: true }) }, icon('arrow-right')) : null);
+  }
+  const body = h('div.bubble.md');
+  body.innerHTML = markdown(m.text);
+  for (const a of body.querySelectorAll('code')) {
+    // a file:line in an answer opens it
+    const mm = /^([\w./-]+\.(?:tex|bib|sty|cls)):(\d+)$/.exec(a.textContent);
+    if (mm && has(mm[1])) { a.classList.add('link'); a.addEventListener('click', () => openFile(mm[1], { line: +mm[2], flash: true })); }
+  }
+  return h('div.msg.agent', { dataset: { mid: m.mid } }, h('div.who', icon('bot'), m.agent), body);
+}
+
+function appendMessage(m) {
+  const box = $('#asstBody');
+  if (!box) return;
+  const empty = box.querySelector('.asst-empty');
+  if (empty) empty.remove();
+  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  box.appendChild(messageEl(m));
+  if (near || m.role === 'user') box.scrollTop = box.scrollHeight;
+}
+
+function renderAssistant() {
+  const box = $('#asstBody');
+  if (!box) return;
+  const rows = A.chat.map(messageEl);
+  if (!A.chat.length) {
+    if (!A.agents.length) rows.push(connectCard());
+    else rows.push(h('div.asst-empty', icon('bot'), h('p', `${A.agents[0].name} is connected. Ask about the paper, or select a passage and ask for a change.`)));
+  }
+  box.replaceChildren(...rows);
+  box.scrollTop = box.scrollHeight;
+  renderReviews();
+  renderPresence();
+  renderCtxChip();
+}
+
+// Files an agent changed that still wait for keep or undo, listed above the input.
+function renderReviews() {
+  const box = $('#asstReviews');
+  if (!box) return;
+  const pend = [...A.reviews.entries()];
+  box.hidden = !pend.length;
+  box.replaceChildren(...(pend.length ? [h('h4', 'Changes to review'), ...pend.map(([p, rv]) => h('div.cmp-row', { title: `Open ${p} to keep or undo`, onclick: () => openFile(p) },
+    icon('pencil-line'), h('span.name', p), h('span.tag', rv.agent)))] : []));
+  for (const el of $$('#asstBody .msg.act[data-path]')) el.classList.toggle('pending', A.reviews.has(el.dataset.path));
+}
+
 // ------------------------------------------------------------------ comparing with another version of the paper
 // The other version is a second folder, read-only. Its text shows inline in the editor where it differs, its PDF
 // below yours. Files are matched by their path inside each folder.
@@ -1448,13 +1708,15 @@ function cmpRemember() {
   else delete all[S.project.root];
   store.set('compare', all);
 }
-function comparingFile(path) { return !!(C.ref && C.showDiff && C.texts.has(path)); }
+function comparingFile(path) { return !!((C.ref && C.showDiff && C.texts.has(path)) || A.reviews.has(path)); }
 const compareKinds = (p) => /\.(tex|ltx|bib|cls|sty|bst|txt|md)$/i.test(p);
 
 function applyCompare(path) {
   const t = activeTab();
   if (!editor || !t || t.kind !== 'text' || t.path !== path) return;
-  editor.setCompare(comparingFile(path) ? C.texts.get(path) : null, C.ref ? C.ref.name : '');
+  const rv = A.reviews.get(path);
+  if (rv) editor.setCompare(rv.base, rv.agent, { accept: 'Keep', reject: 'Undo' });   // an agent's changes come first
+  else editor.setCompare(C.ref && C.showDiff && C.texts.has(path) ? C.texts.get(path) : null, C.ref ? C.ref.name : '');
   renderCmpBar();
 }
 
@@ -1618,6 +1880,11 @@ async function copyRefFile(path) {
 
 const cmpBarSoon = debounce(() => {
   const t = activeTab();
+  // a review is done when every change has been kept or undone
+  if (t && t.kind === 'text' && A.reviews.has(t.path)) {
+    const info = editor.compareInfo();
+    if (info && info.count === 0) finishReview(t.path, 'kept');
+  }
   if (t && t.kind === 'text' && C.ref) {
     const s = statsFor(t.path);
     if (s) C.stats.set(t.path, s);
@@ -1630,6 +1897,21 @@ const cmpBarSoon = debounce(() => {
 function renderCmpBar() {
   const bar = $('#cmpBar');
   const t = activeTab();
+  const rv = t && t.kind === 'text' ? A.reviews.get(t.path) : null;
+  if (rv) {
+    const info = editor.compareInfo();
+    const n = info ? info.count : 0;
+    bar.hidden = false;
+    bar.classList.add('review');
+    bar.replaceChildren(icon('bot'), h('span', h('b', rv.agent), ' changed this file', rv.note ? ' · ' + rv.note : ''),
+      h('div.spacer'), h('span.count', n ? (info.index ? `change ${info.index} of ${n}` : `${n} change${n > 1 ? 's' : ''}`) : 'no changes left'),
+      h('button.mini', { title: 'Previous change (Shift+F7)', disabled: !n, onclick: () => { editor.prevChange(); editor.view.focus(); } }, icon('chevron-up')),
+      h('button.mini', { title: 'Next change (F7)', disabled: !n, onclick: () => { editor.nextChange(); editor.view.focus(); } }, icon('chevron-down')),
+      h('button.btn', { title: 'Undo everything the agent changed in this file', onclick: () => finishReview(t.path, 'undo') }, icon('undo-2'), 'Undo all'),
+      h('button.btn.primary', { title: 'Keep the changes', onclick: () => finishReview(t.path, 'kept') }, icon('check'), 'Keep all'));
+    return;
+  }
+  bar.classList.remove('review');
   if (!C.ref || !t || t.kind !== 'text') { bar.hidden = true; return; }
   bar.hidden = false;
   const name = C.ref.name;
@@ -1807,7 +2089,7 @@ async function diskChanged(path) {
   if (!S.dirty.has(path)) {
     replaceDoc(path, r.text);
     indexSoon(path);
-    toast(`${base(path)} changed on disk and was reloaded`);
+    if (!A.reviews.has(path)) toast(`${base(path)} changed on disk and was reloaded`);
   } else {
     S.conflicts.set(path, r.text);
     renderBanner();
@@ -1850,6 +2132,8 @@ function commandList() {
     { label: 'Open another project…', icon: 'folder-open', run: openProjectDialog },
     { label: 'Changes and history', icon: 'git-branch', run: () => showView('git') },
     { label: 'Compare with another version…', icon: 'git-compare', run: () => showView('compare') },
+    { label: 'Assistant: talk to your AI agent', icon: 'bot', kbd: 'Mod+Shift+A', run: () => showView('assistant', true) },
+    { label: 'Connect an AI agent…', icon: 'plug', run: showConnect },
     C.ref ? { label: 'Stop comparing', icon: 'x', run: closeCompare } : null,
     C.ref ? { label: 'Next difference', icon: 'chevron-down', kbd: 'F7', run: () => { editor.nextChange(); editor.view.focus(); } } : null,
     C.ref ? { label: 'Previous difference', icon: 'chevron-up', kbd: 'Shift+F7', run: () => { editor.prevChange(); editor.view.focus(); } } : null,
@@ -2168,6 +2452,13 @@ function showView(name, focus, toggle = false) {
   if (name === 'git') { renderGit(); refreshGit(); }
   if (name === 'symbols' && !$('#symHost').firstChild) $('#symHost').appendChild(buildSymbolPanel(insertSymbol));
   if (name === 'compare') renderCompare();
+  if (name === 'assistant') {
+    A.unread = 0;
+    $('#asstBadge').hidden = true;
+    if (sb.offsetWidth < 340) sb.style.width = '360px';
+    renderCtxChip();
+    if (focus !== false) setTimeout(() => $('#chatInput').focus(), 0);
+  }
 }
 
 function dragger(handle, onMove, onEnd) {
@@ -2295,6 +2586,12 @@ function bindUI() {
   $('#searchRegex').onclick = () => { S.searchOpts.regex = !S.searchOpts.regex; syncSearchToggles(); runSearch(); };
   $('#replaceAllBtn').onclick = replaceAll;
   $('#gitRefresh').onclick = refreshGit;
+  // the Assistant
+  $('#chatSend').onclick = sendChat;
+  $('#chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendChat(); } });
+  $('#chatInput').addEventListener('input', autosizeChat);
+  $('#asstConnect').onclick = showConnect;
+  $('#asstClear').onclick = async () => { if (await confirmDialog({ title: 'Clear the conversation', message: 'Remove all messages from the Assistant panel? Your agent keeps its own memory of them.', okText: 'Clear' })) api('/api/chat/clear', {}); };
   // the other version's PDF
   $('#refZoomIn').onclick = () => C.pdf && C.pdf.zoomBy(1.15);
   $('#refZoomOut').onclick = () => C.pdf && C.pdf.zoomBy(1 / 1.15);
@@ -2342,6 +2639,7 @@ function bindUI() {
     else if (mod && e.shiftKey && k === 'o') openQuick('@');
     else if (mod && e.shiftKey && k === 'e') showView('files', true);
     else if (mod && e.shiftKey && k === 'm') toggleDrawer();
+    else if (mod && e.shiftKey && k === 'a') showView('assistant', true);
     else if (mod && !e.shiftKey && k === 'j') syncToPdf();
     else if (e.key === 'F7' && C.ref && activeKind() === 'text') { if (e.shiftKey) editor.prevChange(); else editor.nextChange(); }
     else if (mod && k === ',') showSettings();
@@ -2415,6 +2713,7 @@ async function boot() {
   setDtab('problems');
   applySettings();
   await loadProject();
+  startAssistant();
   const saved = store.get('tabs', {})[S.project.root];
   if (saved && saved.tabs.length) {
     S.tabs = saved.tabs.filter((t) => S.fileMap.has(t.path));

@@ -640,9 +640,11 @@ export function createEditor(parent, hooks, settings) {
     },
     // Show another version of this file inline: its text where it differs, with buttons to keep or take it.
     // original: that version's text, or null to stop comparing.
-    setCompare(original, name) {
+    setCompare(original, name, labels) {
+      const accept = (labels && labels.accept) || 'Keep mine';
+      const reject = (labels && labels.reject) || 'Use ' + name;
       const cur = view.state.facet(compareKey);
-      const key = original == null ? null : name + '\u0000' + original.length + '\u0000' + hashText(original);
+      const key = original == null ? null : [name, accept, reject, original.length, hashText(original)].join('\u0000');
       if (cur === key) return;
       // the merge view keeps its original text across reconfigurations, so take it out before putting a new one in
       if (cur != null) view.dispatch({ effects: compareComp.reconfigure([]) });
@@ -650,7 +652,7 @@ export function createEditor(parent, hooks, settings) {
       view.dispatch({ effects: compareComp.reconfigure([
         compareKey.of(key),
         unifiedMergeView({ original, highlightChanges: true, gutter: true, syntaxHighlightDeletions: true, mergeControls: true }),
-        EditorState.phrases.of({ Accept: 'Keep mine', Reject: 'Use ' + name }),
+        EditorState.phrases.of({ Accept: accept, Reject: reject }),
       ]) });
     },
     compareInfo() {

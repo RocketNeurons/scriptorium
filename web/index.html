@@ -72,6 +72,7 @@
       <button data-view="search" title="Search the project (Ctrl+Shift+F)"><i data-i="search"></i></button>
       <button data-view="compare" title="Compare with another version"><i data-i="git-compare"></i><span class="badge dot" id="cmpBadge" hidden></span></button>
       <button data-view="symbols" title="Math symbols"><i data-i="sigma"></i></button>
+      <button data-view="assistant" title="Assistant: talk to your AI agent (Ctrl+Shift+A)"><i data-i="bot"></i><span class="badge" id="asstBadge" hidden></span></button>
       <button data-view="git" title="Changes and history"><i data-i="git-branch"></i><span class="badge" id="gitBadge" hidden></span></button>
       <div class="spacer"></div>
       <button id="wordsBtn" title="Word count by section"><i data-i="hash"></i></button>
@@ -130,6 +131,25 @@
           <div class="pane-actions"><button class="mini" id="cmpRefresh" title="Reload the other version"><i data-i="refresh-cw"></i></button></div>
         </div>
         <div class="cmp-body" id="cmpBody"></div>
+      </section>
+
+      <section class="view" data-view="assistant">
+        <div class="pane-head"><span>Assistant</span><span class="asst-who" id="asstWho"></span>
+          <div class="pane-actions">
+            <button class="mini" id="asstConnect" title="How to connect an agent"><i data-i="plug"></i></button>
+            <button class="mini" id="asstClear" title="Clear the conversation"><i data-i="trash-2"></i></button>
+          </div>
+        </div>
+        <div class="asst-body" id="asstBody"></div>
+        <div class="asst-foot">
+          <div class="asst-reviews" id="asstReviews" hidden></div>
+          <div class="asst-presence" id="asstPresence"></div>
+          <div class="asst-ctx" id="asstCtx"></div>
+          <div class="asst-input">
+            <textarea id="chatInput" rows="2" placeholder="Ask your agent about the document… (Enter sends)"></textarea>
+            <button class="btn primary" id="chatSend" title="Send (Enter)"><i data-i="send"></i></button>
+          </div>
+        </div>
       </section>
 
       <section class="view" data-view="symbols">

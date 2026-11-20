@@ -1069,3 +1069,79 @@ button.sb-item:hover { background: var(--hover); color: var(--text); }
 .tecto .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .tecto .row-btns .btn { height: 30px; }
 .tecto-wrap { max-width: 560px; padding: 20px; }
+
+/* ------------------------------------------------------------ the Assistant panel */
+.asst-who { margin-left: 4px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--accent); font-size: 12px; }
+.asst-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.asst-foot { flex: none; border-top: 1px solid var(--border); padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); }
+.asst-input { display: flex; gap: 6px; align-items: flex-end; }
+.asst-input textarea {
+  flex: 1; resize: none; min-height: 38px; max-height: 200px; padding: 8px 10px;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); outline: none;
+  font: 13px/1.45 var(--font-ui); color: var(--text);
+}
+.asst-input textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.asst-input .btn { height: 38px; padding: 0 12px; border-radius: 10px; }
+.asst-ctx { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-2); min-width: 0; }
+.asst-ctx svg.i { width: 13px; height: 13px; color: var(--muted); flex: none; }
+.asst-ctx span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asst-ctx .muted { color: var(--faint); flex: none; }
+.asst-presence { font-size: 12px; color: var(--text-2); min-height: 18px; }
+.pres { display: inline-flex; align-items: center; gap: 6px; }
+.pres .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.pres.on .dot { background: var(--success); box-shadow: 0 0 0 3px rgba(24, 121, 78, .15); }
+.pres.busy .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.pres.off { color: var(--muted); }
+.pres a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.pres .dots { display: inline-flex; gap: 2px; margin-left: 2px; }
+.pres .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.pres .dots i:nth-child(2) { animation-delay: .2s; }
+.pres .dots i:nth-child(3) { animation-delay: .4s; }
+
+.msg.user { align-self: flex-end; max-width: 92%; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.msg.user .bubble { background: var(--accent); color: var(--accent-ink); padding: 8px 11px; border-radius: 12px 12px 4px 12px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.msg .meta { display: flex; gap: 8px; font-size: 11px; color: var(--faint); }
+.msg.agent { align-self: stretch; display: flex; flex-direction: column; gap: 3px; }
+.msg.agent .who { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; color: var(--accent); }
+.msg.agent .who svg.i { width: 13px; height: 13px; }
+.msg.agent .bubble { background: var(--bg); border: 1px solid var(--border); padding: 9px 12px; border-radius: 4px 12px 12px 12px; line-height: 1.5; overflow-wrap: anywhere; color: var(--text); }
+.md p { margin: 0 0 7px; }
+.md p:last-child, .md ul:last-child, .md ol:last-child, .md pre:last-child { margin-bottom: 0; }
+.md p.h { font-weight: 650; margin-top: 4px; }
+.md ul, .md ol { margin: 0 0 7px; padding-left: 20px; }
+.md li { margin: 2px 0; }
+.md code { font: 12px var(--font-mono); background: var(--hover); padding: 1px 4px; border-radius: 4px; }
+.md code.link { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.md pre { margin: 0 0 7px; padding: 8px 10px; background: var(--app); border: 1px solid var(--border); border-radius: 7px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; white-space: pre; }
+.md blockquote { margin: 0 0 7px; padding-left: 10px; border-left: 3px solid var(--border-strong); color: var(--text-2); }
+.md a { color: var(--accent); }
+.msg.act { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); padding: 0 2px; }
+.msg.act svg.i { width: 13px; height: 13px; flex: none; }
+.msg.act .what { flex: 1; min-width: 0; }
+.msg.act b { color: var(--text-2); font-weight: 600; }
+.msg.act .go { width: 20px; height: 20px; flex: none; }
+.msg.act .tag { display: none; }
+.msg.act.pending .tag { display: inline; }
+.msg.act .tag, .row .tag.review, .asst-reviews .tag { font-size: 10.5px; font-weight: 600; color: var(--warning); background: var(--warning-soft); padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.asst-empty { margin: auto 0; text-align: center; color: var(--muted); padding: 20px 10px; }
+.asst-empty > svg.i { width: 34px; height: 34px; color: var(--faint); stroke-width: 1.4; }
+.asst-empty p { margin: 6px 0 0; line-height: 1.5; }
+.asst-reviews { display: flex; flex-direction: column; gap: 1px; margin: 0 -4px 2px; max-height: 130px; overflow: auto; }
+.asst-reviews .cmp-row { height: 26px; }
+.asst-reviews h4 { margin: 0 6px 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--warning); }
+
+.connect { border: 1px solid var(--border); background: var(--bg); border-radius: 12px; padding: 12px 13px; display: flex; flex-direction: column; gap: 9px; }
+.connect .t { display: flex; align-items: center; gap: 7px; font-weight: 650; color: var(--text); }
+.connect .t svg.i { color: var(--accent); }
+.connect p { margin: 0; color: var(--text-2); line-height: 1.5; font-size: 12.5px; }
+.connect p.after b { color: var(--text); }
+.connect p.muted { color: var(--faint); font-size: 11.5px; }
+.snip { display: flex; flex-direction: column; gap: 3px; }
+.snip-l { font-size: 11.5px; font-weight: 650; color: var(--text-2); }
+.snip-s { font-size: 11px; color: var(--muted); }
+.snip-b { position: relative; }
+.snip-b code { display: block; padding: 7px 34px 7px 9px; border-radius: 7px; background: var(--app); border: 1px solid var(--border); font: 11.5px/1.45 var(--font-mono); color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; }
+.snip-b .mini { position: absolute; right: 4px; top: 4px; }
+.cmpbar.review { background: var(--warning-soft); }
+.cmpbar.review svg.i { color: var(--warning); }

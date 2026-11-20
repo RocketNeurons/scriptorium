@@ -87,10 +87,40 @@ python3 scriptorium.py path/to/my-paper
 
 <p align="center"><img src="docs/compare.png" alt="Comparing with an earlier draft: differences inline in the editor, the two PDFs one above the other"></p>
 
+**Your AI agent, in the editor**
+- Chat with your own AI agent from the **Assistant** panel: Claude Code, Codex, Cursor, a script around a local model,
+  anything. See [Talk to your AI agent](#talk-to-your-ai-agent) below.
+
 **Comfort**
 - Light and dark themes, dark PDF pages, autosave, and reloading of files changed by other programs.
 - Install it as an app (Edge: menu, Apps, Install this site as an app. Chrome: the install icon in the address bar)
   to give it its own window and a Start menu or Dock entry.
+
+## Talk to your AI agent
+
+Scriptorium does not run a model and never asks for an API key. Instead it opens a **door** on your computer, and
+the agent you already use comes in through it, with its own login. Through the door the agent sees what you are
+looking at (file, cursor, selection, errors), reads what you write in the **Assistant** panel, answers there, edits
+the document and compiles it. Every edit appears in the editor as a change you **keep** or **undo**.
+
+1. Open the **Assistant** panel (the robot icon, or Ctrl+Shift+A). It shows how to connect, with your private address.
+2. Connect your agent, once:
+
+   | Agent | How |
+   |---|---|
+   | Claude Code | run the `claude mcp add ...` line from the panel in a terminal |
+   | Codex, Cursor, other MCP apps | add the MCP server address from the panel (streamable HTTP) |
+   | Any agent with a terminal | paste it the sentence from the panel: it reads the instructions with `curl` |
+
+3. Tell your agent: **"Listen to me in Scriptorium."** Then write in the panel. Select a passage first to ask about
+   it ("make this shorter", "check this proof", "add a citation for this claim").
+
+<p align="center"><img src="docs/assistant.png" alt="The Assistant panel: the user asks to shorten the selected title, the agent edits it, and the change waits in the editor with Keep and Undo buttons"></p>
+
+The door is plain HTTP and MCP on `localhost`, protected by a key that only the panel shows. Agents get these tools:
+`wait_for_message`, `send_message`, `set_status`, `get_context`, `list_files`, `read_file`, `edit_file`,
+`write_file`, `compile` and `show_location`. The full instructions an agent receives are at `/agent` (open the
+address from the panel to read them).
 
 ## Keyboard shortcuts
 
@@ -107,7 +137,8 @@ python3 scriptorium.py path/to/my-paper
 | Ctrl+/ | Comment lines in or out |
 | Ctrl+F / Ctrl+Shift+F | Find in the file / in all files |
 | F12 or Ctrl+click | Follow a `\ref`, `\cite`, `\input` or image |
-| F7 / Shift+F7 | Next / previous difference when comparing |
+| F7 / Shift+F7 | Next / previous difference when comparing or reviewing |
+| Ctrl+Shift+A | Talk to your AI agent |
 
 On a Mac, use Cmd instead of Ctrl.
 
@@ -116,8 +147,9 @@ On a Mac, use Cmd instead of Ctrl.
 **The first compile is slow.** Tectonic downloads the LaTeX packages a document needs the first time it sees them.
 After that, compiles take a few seconds.
 
-**Does my paper leave my computer?** No. Scriptorium only goes online to download its editor libraries once, to let
-Tectonic fetch LaTeX packages, and to look up a DOI or arXiv ID when you ask it to.
+**Does my paper leave my computer?** Not through Scriptorium. It only goes online to download its editor libraries
+once, to let Tectonic fetch LaTeX packages, and to look up a DOI or arXiv ID when you ask it to. If you connect an AI
+agent, that agent sends what it reads to its own provider, as it always does.
 
 **Where does the PDF go?** Into a cache folder, so your project folder stays clean. The download button above the PDF
 saves a copy wherever you like.
@@ -148,6 +180,7 @@ time and kept in a cache. There is no build step: edit a file, reload the page.
 |---|---|
 | `scriptorium.py` | The server: projects, Tectonic, error messages, git, templates |
 | `synctex.py` | The jumps between the PDF and the source |
+| `door.py` | The agent door: MCP and HTTP tools for AI agents, the conversation |
 | `templates/` | The starting projects on the welcome page (add your own: a folder with a `template.json`) |
 | `web/js/main.js` | The app: files, tabs, outline, search, compiling, comparing, settings |
 | `web/js/editor.js` | The editor: LaTeX highlighting, completion, hovers, math preview, checks |
